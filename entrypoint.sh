@@ -1,45 +1,19 @@
 #!/bin/bash
 set -e
 
-echo "🔧 Recovery Protocol Server starting..."
+echo "[recovery] generating host keys if missing"
+ssh-keygen -A >/dev/null
 
-# Generate SSH host keys if they don't exist
-if [ ! -f /etc/ssh/ssh_host_rsa_key ]; then
-    echo "📝 Generating SSH host keys..."
-    ssh-keygen -A
-fi
-
-# Create recovery user SSH directory with proper permissions
-mkdir -p /home/recovery/.ssh
-touch /home/recovery/.ssh/authorized_keys
+# Keys are re-registered through the intro page after each container start
+chown -R recovery:recovery /home/recovery /srv/git
 chmod 700 /home/recovery/.ssh
+touch /home/recovery/.ssh/authorized_keys
+chown recovery:recovery /home/recovery/.ssh/authorized_keys
 chmod 600 /home/recovery/.ssh/authorized_keys
-chown -R recovery:recovery /home/recovery/.ssh
-chown -R recovery:recovery /home/recovery
 
-# Ensure SSH can read authorized_keys
-# sshd runs as root, needs to read recovery's authorized_keys
-chmod 644 /home/recovery/.ssh/authorized_keys
+echo "[recovery] sshd listening on 2222 (git)"
+/usr/sbin/sshd -D -e &
 
-# Initialize git repos if empty
-for repo in /srv/git/*.git; do
-    if [ ! -f "$repo/HEAD" ]; then
-        echo "📦 Initializing bare git repository: $repo"
-        git init --bare "$repo"
-    fi
-done
-
-chown -R recovery:recovery /srv/git
-
-# Start SSH daemon in background
-echo "🔐 Starting SSH server on port 2222..."
-/usr/sbin/sshd -D &
-SSH_PID=$!
-
-# Start Flask app
-echo "🌐 Starting web server on port 8080..."
+echo "[recovery] web listening on 8080 (intro, CLI download, key registration)"
 cd /app
-python server.py
-
-# Keep container running
-wait $SSH_PID
+exec python server.py

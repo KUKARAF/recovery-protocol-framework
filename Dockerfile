@@ -1,52 +1,47 @@
 FROM python:3.11-slim
 
-# Install SSH, git, and system dependencies
-RUN apt-get update && apt-get install -y \
-    openssh-server \
-    git \
-    sudo \
-    curl \
+# sshd for git access, git itself, and ssh-keygen for key validation
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        openssh-server \
+        git \
     && rm -rf /var/lib/apt/lists/*
 
-# Create ssh directory and configure SSH
-RUN mkdir -p /run/sshd /home/recovery/.ssh && \
-    chmod 700 /home/recovery/.ssh
-
-# Create recovery user with bash
-RUN useradd -m -d /home/recovery -s /bin/bash recovery && \
-    echo "recovery:recovery" | chpasswd
-
-# Set up git repository directories
-RUN mkdir -p /srv/git/framework.git /srv/git/modules.git && \
-    chown -R recovery:recovery /srv/git
-
-# Initialize bare git repositories (main is the default branch)
+# Git defaults: branch 'main', and trust the bare repos regardless of owner
+# (sshd and the web app run as root, the repos are owned by 'recovery')
 RUN git config --system init.defaultBranch main && \
-    git config --system --add safe.directory '*' && \
-    cd /srv/git/framework.git && git init --bare && \
-    cd /srv/git/modules.git && git init --bare && \
+    git config --system --add safe.directory '*'
+
+# Player account: real login shell so sshd's git-over-ssh works
+# '*' rather than the default '!' lock: OpenSSH without PAM rejects locked accounts
+# as "invalid user" before it ever checks the public key
+RUN useradd -m -d /home/recovery -s /bin/bash recovery && \
+    usermod -p '*' recovery && \
+    mkdir -p /home/recovery/.ssh /run/sshd && \
+    chmod 700 /home/recovery/.ssh && \
+    chown -R recovery:recovery /home/recovery
+
+# Bare repositories. Content is pushed in by seed.sh
+RUN mkdir -p /srv/git && \
+    git init --bare /srv/git/framework.git && \
+    git init --bare /srv/git/modules.git && \
     chown -R recovery:recovery /srv/git
 
-# Copy SSH config and git handler
 COPY sshd_config /etc/ssh/sshd_config
-COPY git-handler.sh /app/git-handler.sh
-RUN chmod +x /app/git-handler.sh
 
-# Install Python dependencies
-RUN pip install flask flask-cors rich typer pytest gitpython
+# Python side: web app + CLI wheel served to players
+RUN pip install --no-cache-dir flask
+WORKDIR /build
+COPY pyproject.toml README.md /build/
+COPY src /build/src
+RUN pip install --no-cache-dir build && \
+    python -m build --wheel --outdir /app/dist /build && \
+    rm -rf /build
 
-# Create app directory
 WORKDIR /app
-
-# Copy the web app
-COPY server.py /app/server.py
-COPY intro.html /app/intro.html
-
-# Copy entrypoint
+COPY server.py intro.html /app/
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# Expose ports (2222 for SSH, 8080 for web)
 EXPOSE 2222 8080
 
 ENTRYPOINT ["/entrypoint.sh"]
