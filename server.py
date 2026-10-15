@@ -104,8 +104,8 @@ def recover():
             "user_id": user_id,
             "message": "Recovery initialized. SSH key registered.",
             "next_steps": {
-                "ssh_clone_framework": f"git clone ssh://recovery@localhost/srv/git/framework.git",
-                "ssh_clone_modules": f"git clone ssh://recovery@localhost/srv/git/modules.git",
+                "ssh_clone_framework": f"git clone ssh://recovery@localhost:2222/srv/git/framework.git",
+                "ssh_clone_modules": f"git clone ssh://recovery@localhost:2222/srv/git/modules.git",
                 "validate": "./validate --mission 1 --task sort_signals"
             }
         }), 200

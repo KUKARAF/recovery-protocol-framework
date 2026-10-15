@@ -11,7 +11,7 @@ podman build -t recovery-protocol-server .
 # Run the container (with podman or docker)
 podman run -d \
   --name recovery-protocol \
-  -p 22:22 \
+  -p 2222:2222 \
   -p 8080:8080 \
   recovery-protocol-server
 
@@ -68,13 +68,13 @@ curl -X POST http://localhost:8080/recover \
 
 ```bash
 # Configure SSH to use the test key and connect without host key checking
-export GIT_SSH_COMMAND="ssh -i ~/.ssh/test_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+export GIT_SSH_COMMAND="ssh -i ~/.ssh/test_key -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 
-# Clone framework
-git clone ssh://recovery@localhost:/srv/git/framework.git test-framework
+# Clone framework (using port 2222)
+git clone ssh://recovery@localhost:2222/srv/git/framework.git test-framework
 
-# Clone modules
-git clone ssh://recovery@localhost:/srv/git/modules.git test-modules
+# Clone modules (using port 2222)
+git clone ssh://recovery@localhost:2222/srv/git/modules.git test-modules
 ```
 
 ### 4. Run Local Validation

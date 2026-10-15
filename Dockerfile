@@ -42,7 +42,7 @@ COPY intro.html /app/intro.html
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# Expose ports
-EXPOSE 22 8080
+# Expose ports (2222 for SSH, 8080 for web)
+EXPOSE 2222 8080
 
 ENTRYPOINT ["/entrypoint.sh"]
