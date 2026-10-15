@@ -12,8 +12,8 @@ RUN apt-get update && apt-get install -y \
 RUN mkdir -p /run/sshd /home/recovery/.ssh && \
     chmod 700 /home/recovery/.ssh
 
-# Create recovery user with git-shell (restricted shell for git-only access)
-RUN useradd -m -d /home/recovery -s /usr/bin/git-shell recovery && \
+# Create recovery user with bash
+RUN useradd -m -d /home/recovery -s /bin/bash recovery && \
     echo "recovery:recovery" | chpasswd
 
 # Set up git repository directories
@@ -25,8 +25,10 @@ RUN cd /srv/git/framework.git && git init --bare && \
     cd /srv/git/modules.git && git init --bare && \
     chown -R recovery:recovery /srv/git
 
-# Copy SSH config
+# Copy SSH config and git handler
 COPY sshd_config /etc/ssh/sshd_config
+COPY git-handler.sh /app/git-handler.sh
+RUN chmod +x /app/git-handler.sh
 
 # Install Python dependencies
 RUN pip install flask flask-cors rich typer pytest gitpython

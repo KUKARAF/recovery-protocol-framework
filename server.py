@@ -71,10 +71,9 @@ def recover():
         }
         save_db(db)
 
-        # Add SSH key to authorized_keys (git-shell handles the restriction)
-        # No command wrapper needed - git-shell is the login shell
+        # Add SSH key to authorized_keys with git command wrapper
         with open(AUTHORIZED_KEYS, 'a') as f:
-            f.write(f"no-port-forwarding,no-agent-forwarding,no-X11-forwarding {ssh_key}\n")
+            f.write(f'command="/app/git-handler.sh",no-port-forwarding,no-agent-forwarding,no-X11-forwarding {ssh_key}\n')
 
         # Set correct permissions
         AUTHORIZED_KEYS.chmod(0o600)
