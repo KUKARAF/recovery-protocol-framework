@@ -9,12 +9,17 @@ if [ ! -f /etc/ssh/ssh_host_rsa_key ]; then
     ssh-keygen -A
 fi
 
-# Create recovery user SSH directory
+# Create recovery user SSH directory with proper permissions
 mkdir -p /home/recovery/.ssh
-chmod 700 /home/recovery/.ssh
 touch /home/recovery/.ssh/authorized_keys
+chmod 700 /home/recovery/.ssh
 chmod 600 /home/recovery/.ssh/authorized_keys
 chown -R recovery:recovery /home/recovery/.ssh
+chown -R recovery:recovery /home/recovery
+
+# Ensure SSH can read authorized_keys
+# sshd runs as root, needs to read recovery's authorized_keys
+chmod 644 /home/recovery/.ssh/authorized_keys
 
 # Initialize git repos if empty
 for repo in /srv/git/*.git; do
