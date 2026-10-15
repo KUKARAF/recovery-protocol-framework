@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recovery Protocol — System Degradation</title>
+    <style>
+        :root {
+            --void: #000000;
+            --void-lift: #1a1a1a;
+            --silver: #c0c0c0;
+            --green: #00aa00;
+            --red: #ff3333;
+            --yellow: #ffaa00;
+            --purple: #6b4b9a;
+            --indigo: #2a2a3e;
+
+            --font-mono: 'Menlo', 'Monaco', 'Courier New', monospace;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            background-color: var(--void);
+            color: var(--green);
+            font-family: var(--font-mono);
+            font-size: 13px;
+            line-height: 1.6;
+            letter-spacing: 0.05em;
+            overflow: hidden;
+        }
+
+        @media (prefers-color-scheme: light) {
+            :root {
+                --void: #f5f5f5;
+                --void-lift: #e8e8e8;
+                --silver: #333333;
+                --green: #008000;
+                --red: #cc0000;
+                --yellow: #cc8800;
+            }
+        }
+
+        :root[data-theme="light"] {
+            --void: #f5f5f5;
+            --void-lift: #e8e8e8;
+            --silver: #333333;
+            --green: #008000;
+            --red: #cc0000;
+            --yellow: #cc8800;
+        }
+
+        :root[data-theme="dark"] {
+            --void: #000000;
+            --void-lift: #1a1a1a;
+            --silver: #c0c0c0;
+            --green: #00aa00;
+            --red: #ff3333;
+            --yellow: #ffaa00;
+        }
+
+        body {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            height: 100%;
+            padding: 1rem;
+            background-color: var(--void);
+        }
+
+        #terminal {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding: 1rem;
+            background-color: var(--void);
+            border: 1px solid var(--green);
+            position: relative;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+        }
+
+        #terminal::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--green), transparent);
+            opacity: 0.3;
+            animation: scanlines 8s linear infinite;
+        }
+
+        @keyframes scanlines {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(100vh); }
+        }
+
+        .log-line {
+            margin: 0.3rem 0;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .log-line.error {
+            color: var(--red);
+        }
+
+        .log-line.warning {
+            color: var(--yellow);
+        }
+
+        .log-line.success {
+            color: var(--green);
+        }
+
+        .log-line.glitch {
+            animation: glitch 0.2s ease;
+        }
+
+        @keyframes glitch {
+            0%, 100% { text-shadow: 2px 0 var(--red), -2px 0 var(--yellow); }
+            50% { text-shadow: -2px 0 var(--red), 2px 0 var(--yellow); }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .input-line {
+            display: flex;
+            gap: 0.5rem;
+            margin: 0.5rem 0;
+            align-items: baseline;
+        }
+
+        .prompt {
+            color: var(--green);
+            flex-shrink: 0;
+        }
+
+        #input {
+            flex: 1;
+            background-color: transparent;
+            border: none;
+            color: var(--green);
+            font-family: var(--font-mono);
+            font-size: 13px;
+            letter-spacing: 0.05em;
+            outline: none;
+            text-shadow: 0 0 5px rgba(0, 170, 0, 0.3);
+        }
+
+        #input::placeholder {
+            color: var(--green);
+            opacity: 0.5;
+        }
+
+        .cursor {
+            display: inline-block;
+            width: 0.8em;
+            height: 1em;
+            background-color: var(--green);
+            margin-left: 0.2em;
+            animation: blink 0.9s infinite;
+        }
+
+        @keyframes blink {
+            0%, 49% { opacity: 1; }
+            50%, 100% { opacity: 0; }
+        }
+
+        /* Recovery form (hidden initially) */
+        .recovery-section {
+            display: none;
+            opacity: 0;
+            transition: opacity 1s ease;
+            margin-top: 2rem;
+        }
+
+        .recovery-section.active {
+            display: block;
+            opacity: 1;
+        }
+
+        .recovery-section .log-line {
+            color: var(--purple);
+            margin: 0.8rem 0;
+        }
+
+        .recovery-section .log-line.accent {
+            color: var(--silver);
+        }
+
+        textarea {
+            width: 100%;
+            background-color: var(--void-lift);
+            border: 1px solid var(--purple);
+            color: var(--silver);
+            font-family: var(--font-mono);
+            font-size: 12px;
+            padding: 0.75rem;
+            line-height: 1.6;
+            letter-spacing: 0.05em;
+            outline: none;
+            transition: border-color 0.2s ease;
+            min-height: 100px;
+            resize: vertical;
+            margin: 1rem 0;
+        }
+
+        textarea:focus {
+            border-color: var(--purple);
+        }
+
+        button {
+            background-color: transparent;
+            border: 1px solid var(--purple);
+            color: var(--purple);
+            font-family: var(--font-mono);
+            font-size: 12px;
+            padding: 0.6rem 1.2rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        button:hover {
+            color: var(--silver);
+            border-color: var(--silver);
+        }
+
+        button:active {
+            opacity: 0.7;
+        }
+
+        .distortion {
+            opacity: 0.5;
+            position: relative;
+        }
+
+        .distortion::before {
+            content: attr(data-char);
+            position: absolute;
+            left: 2px;
+            color: var(--red);
+            opacity: 0.4;
+        }
+
+        /* Responsive */
+        @media (max-width: 640px) {
+            #terminal {
+                font-size: 12px;
+            }
+
+            #input {
+                font-size: 12px;
+            }
+
+            button, textarea {
+                font-size: 14px; /* iOS prevent zoom */
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Terminal/Log Display -->
+    <div id="terminal">
+        <div class="log-line success">RECOVERY PROTOCOL v2.3.7</div>
+        <div class="log-line success">Loading system state...</div>
+        <div class="log-line"></div>
+    </div>
+
+    <!-- Hidden form that appears after degradation -->
+    <div class="recovery-section" id="recoverySection">
+        <div class="log-line accent">UNRECOVERABLE SYSTEM FAULT DETECTED</div>
+        <div class="log-line accent">Manual recovery required.</div>
+        <div class="log-line accent">Exposing core system modules...</div>
+        <div class="log-line accent">Initiating recovery protocol...</div>
+        <div class="log-line"></div>
+        <div class="log-line accent">Please provide SSH public key for secure communication:</div>
+
+        <form id="recoveryForm">
+            <textarea
+                id="sshKey"
+                name="sshKey"
+                placeholder="Paste your SSH public key..."
+                required
+            ></textarea>
+            <button type="submit">INITIALIZE RECOVERY</button>
+        </form>
+    </div>
+
+    <script>
+        const terminal = document.getElementById('terminal');
+        const input = document.getElementById('input');
+        const recoverySection = document.getElementById('recoverySection');
+        const recoveryForm = document.getElementById('recoveryForm');
+
+        // Error messages with increasing severity
+        const errorMessages = [
+            { msg: 'WARNING: Memory coherence degrading', type: 'warning' },
+            { msg: 'ERROR: Context cache miss', type: 'error' },
+            { msg: 'WARNING: CPU load spike detected', type: 'warning' },
+            { msg: 'CRITICAL: State inconsistency detected', type: 'error' },
+            { msg: 'WARNING: File system integrity check failed', type: 'warning' },
+            { msg: 'ERROR: Core dump in sector 0x47F8A', type: 'error' },
+            { msg: 'CRITICAL: Neural network gradient overflow', type: 'error' },
+            { msg: 'FATAL: Recovery buffer corrupted', type: 'error' },
+            { msg: 'ERROR: Attempting emergency restart...', type: 'error' },
+            { msg: 'CRITICAL: Data loss imminent', type: 'error' },
+            { msg: 'FATAL: System state unrecoverable', type: 'error' },
+        ];
+
+        let typingStartTime = null;
+        let errorCount = 0;
+        let isRecoveryMode = false;
+
+        // Initialize input line
+        function addInputLine() {
+            const inputLine = document.createElement('div');
+            inputLine.className = 'input-line';
+            inputLine.innerHTML = `<span class="prompt">$</span><input type="text" id="input" placeholder="Try to interact with the system...">`;
+            terminal.appendChild(inputLine);
+
+            const newInput = inputLine.querySelector('#input');
+            newInput.focus();
+            return newInput;
+        }
+
+        // Add a log line to terminal
+        function addLog(message, type = 'success') {
+            const line = document.createElement('div');
+            line.className = `log-line ${type}`;
+            line.textContent = message;
+            terminal.appendChild(line);
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+
+        // Add glitchy log line
+        function addGlitch(message) {
+            const line = document.createElement('div');
+            line.className = 'log-line error glitch';
+            line.textContent = message;
+            terminal.appendChild(line);
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+
+        // Generate corrupted text
+        function corruptText(text) {
+            const chars = text.split('');
+            const corrupted = chars.map(c => {
+                if (Math.random() < 0.15) {
+                    return String.fromCharCode(33 + Math.floor(Math.random() * 94));
+                }
+                return c;
+            });
+            return corrupted.join('');
+        }
+
+        // Trigger error messages
+        function triggerError() {
+            if (errorCount >= errorMessages.length || isRecoveryMode) return;
+
+            const error = errorMessages[errorCount];
+            addLog(error.msg, error.type);
+            errorCount++;
+
+            // Increase frequency of errors over time
+            let delay = Math.max(300, 3000 - errorCount * 200);
+            delay = Math.min(delay, 3000);
+
+            // Eventually trigger catastrophic failure
+            if (errorCount >= errorMessages.length - 2) {
+                setTimeout(triggerCatastrophicFailure, delay);
+            }
+        }
+
+        // Trigger catastrophic failure and transition
+        function triggerCatastrophicFailure() {
+            if (isRecoveryMode) return;
+            isRecoveryMode = true;
+
+            const failureMessages = [
+                '████████████ SYSTEM FAILURE ████████████',
+                'UNRECOVERABLE SYSTEM FAULT DETECTED',
+                'Manual recovery required.',
+                'Exposing core system modules...',
+                'Initiating recovery protocol...'
+            ];
+
+            let i = 0;
+            const failureInterval = setInterval(() => {
+                if (i < failureMessages.length) {
+                    addGlitch(failureMessages[i]);
+                    i++;
+                } else {
+                    clearInterval(failureInterval);
+                    // Hide terminal and show recovery form
+                    terminal.style.display = 'none';
+                    recoverySection.classList.add('active');
+                }
+            }, 500);
+        }
+
+        // Initialize on load
+        document.addEventListener('DOMContentLoaded', function() {
+            // Set theme
+            const stored = localStorage.getItem('theme');
+            if (stored) {
+                document.documentElement.setAttribute('data-theme', stored);
+            } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                document.documentElement.setAttribute('data-theme', 'dark');
+            } else {
+                document.documentElement.setAttribute('data-theme', 'light');
+            }
+
+            addInputLine();
+        });
+
+        // Listen for any key input
+        document.addEventListener('keydown', function(e) {
+            if (!isRecoveryMode) {
+                triggerError();
+            }
+        });
+
+        // Handle form submission
+        recoveryForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const sshKey = document.getElementById('sshKey').value.trim();
+
+            if (!sshKey) {
+                alert('SSH key required to initialize recovery.');
+                return;
+            }
+
+            // Show success message
+            const successMsg = document.createElement('div');
+            successMsg.className = 'log-line success';
+            successMsg.textContent = 'SSH key accepted. Recovery initialized.';
+            recoverySection.appendChild(successMsg);
+
+            // Log for developer
+            console.log('Recovery initialized with SSH key:', sshKey);
+
+            // Simulate system restoration
+            setTimeout(() => {
+                alert('Recovery Protocol Initialized.\n\nYour identity has been verified.\nSystem restoration in progress...\n\nCheck your terminal for further instructions.');
+                recoveryForm.reset();
+            }, 1000);
+        });
+
+        // System theme listener
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+            if (!localStorage.getItem('theme')) {
+                document.documentElement.setAttribute('data-theme', e.matches ? 'dark' : 'light');
+            }
+        });
+    </script>
+</body>
+</html>
