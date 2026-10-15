@@ -102,11 +102,12 @@ def recover():
         return jsonify({
             "status": "success",
             "user_id": user_id,
-            "message": "Recovery initialized. SSH key registered.",
+            "message": "Recovery SSH key registered.",
             "next_steps": {
-                "ssh_clone_framework": f"git clone ssh://recovery@localhost:2222/srv/git/framework.git",
-                "ssh_clone_modules": f"git clone ssh://recovery@localhost:2222/srv/git/modules.git",
-                "validate": "./validate --mission 1 --task sort_signals"
+                "clone": f"git clone ssh://recovery@localhost:2222/srv/git/modules.git",
+                "solve": "cd modules && vim back_to_basics_module/tasks/sort_signals.py",
+                "validate": "../framework/validate --mission 1 --task sort_signals",
+                "push": "git push origin HEAD:best/time"
             }
         }), 200
 

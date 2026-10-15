@@ -449,24 +449,45 @@
             const sshKey = document.getElementById('sshKey').value.trim();
 
             if (!sshKey) {
-                alert('SSH key required to initialize recovery.');
+                const errorMsg = document.createElement('div');
+                errorMsg.className = 'log-line error';
+                errorMsg.textContent = 'ERROR: SSH key required to initialize recovery.';
+                recoverySection.appendChild(errorMsg);
                 return;
             }
 
-            // Show success message
-            const successMsg = document.createElement('div');
-            successMsg.className = 'log-line success';
-            successMsg.textContent = 'SSH key accepted. Recovery initialized.';
-            recoverySection.appendChild(successMsg);
+            // Hide form
+            recoveryForm.style.display = 'none';
+
+            // Show success messages on screen
+            const messages = [
+                { text: 'BREAK GLASS PROTOCOL ACTIVATED', class: 'log-line accent' },
+                { text: 'Recovery SSH key registered.', class: 'log-line success' },
+                { text: 'Initiating recovery server...', class: 'log-line accent' },
+                { text: 'Server running.', class: 'log-line success' },
+                { text: '', class: 'log-line' },
+                { text: 'Run git clone to get started:', class: 'log-line accent' },
+                { text: 'git clone ssh://recovery@localhost:2222/srv/git/modules.git', class: 'log-line success' },
+                { text: '', class: 'log-line' },
+                { text: 'Then solve challenges and push optimized solutions to best/time branch.', class: 'log-line accent' }
+            ];
+
+            let i = 0;
+            const msgInterval = setInterval(() => {
+                if (i < messages.length) {
+                    const msg = document.createElement('div');
+                    msg.className = messages[i].class;
+                    msg.textContent = messages[i].text;
+                    recoverySection.appendChild(msg);
+                    i++;
+                } else {
+                    clearInterval(msgInterval);
+                }
+            }, 300);
 
             // Log for developer
             console.log('Recovery initialized with SSH key:', sshKey);
-
-            // Simulate system restoration
-            setTimeout(() => {
-                alert('Recovery Protocol Initialized.\n\nYour identity has been verified.\nSystem restoration in progress...\n\nCheck your terminal for further instructions.');
-                recoveryForm.reset();
-            }, 1000);
+            recoveryForm.reset();
         });
 
         // System theme listener
