@@ -1,0 +1,36 @@
+# Recovery Protocol SSH Server Configuration
+
+Port 22
+Protocol 2
+AddressFamily any
+ListenAddress 0.0.0.0
+ListenAddress ::
+
+# Host Keys
+HostKey /etc/ssh/ssh_host_rsa_key
+HostKey /etc/ssh/ssh_host_ecdsa_key
+HostKey /etc/ssh/ssh_host_ed25519_key
+
+# Authentication
+PubkeyAuthentication yes
+AuthorizedKeysFile .ssh/authorized_keys
+
+# Restrict commands (recovery-protocol specific)
+PermitOpen none
+AllowTcpForwarding no
+AllowAgentForwarding no
+PermitTTY no
+
+# Performance and security
+LoginGraceTime 30
+X11Forwarding no
+PrintMotd no
+AcceptEnv LANG LC_*
+
+# Subsystems
+Subsystem sftp /usr/lib/openssh/sftp-server
+
+# Allow git operations
+Match User recovery
+    PermitTTY yes
+    AllowCommand /usr/bin/git-upload-pack,/usr/bin/git-receive-pack,/usr/bin/git-upload-archive
