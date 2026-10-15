@@ -20,8 +20,10 @@ RUN useradd -m -d /home/recovery -s /bin/bash recovery && \
 RUN mkdir -p /srv/git/framework.git /srv/git/modules.git && \
     chown -R recovery:recovery /srv/git
 
-# Initialize bare git repositories
-RUN cd /srv/git/framework.git && git init --bare && \
+# Initialize bare git repositories (main is the default branch)
+RUN git config --system init.defaultBranch main && \
+    git config --system --add safe.directory '*' && \
+    cd /srv/git/framework.git && git init --bare && \
     cd /srv/git/modules.git && git init --bare && \
     chown -R recovery:recovery /srv/git
 

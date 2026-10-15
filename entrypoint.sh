@@ -32,7 +32,7 @@ done
 chown -R recovery:recovery /srv/git
 
 # Start SSH daemon in background
-echo "🔐 Starting SSH server on port 22..."
+echo "🔐 Starting SSH server on port 2222..."
 /usr/sbin/sshd -D &
 SSH_PID=$!
 

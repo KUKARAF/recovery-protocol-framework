@@ -152,4 +152,5 @@ if __name__ == "__main__":
         AUTHORIZED_KEYS.chmod(0o600)
 
     # Run Flask
-    app.run(host="0.0.0.0", port=8080, debug=True)
+    # "::" is dual-stack on Linux: serves both ::1 (localhost) and 127.0.0.1
+    app.run(host="::", port=8080, debug=True)
