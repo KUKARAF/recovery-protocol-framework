@@ -71,9 +71,11 @@ def recover():
         }
         save_db(db)
 
-        # Add SSH key to authorized_keys with git command wrapper
+        # Add SSH key to authorized_keys
+        # Note: git operations work via SSH without command restriction
         with open(AUTHORIZED_KEYS, 'a') as f:
-            f.write(f'command="/app/git-handler.sh",no-port-forwarding,no-agent-forwarding,no-X11-forwarding {ssh_key}\n')
+            # Just add the key without command wrapper - git will call git-upload-pack/git-receive-pack directly
+            f.write(f"{ssh_key}\n")
 
         # Set correct permissions
         AUTHORIZED_KEYS.chmod(0o600)

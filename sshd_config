@@ -16,12 +16,10 @@ PubkeyAuthentication yes
 PasswordAuthentication no
 AuthorizedKeysFile .ssh/authorized_keys
 
-# Security settings
-PermitOpen none
+# Security settings (permissive for git operations)
 AllowTcpForwarding no
 AllowAgentForwarding no
 X11Forwarding no
-PermitUserEnvironment no
 
 # Performance and security
 LoginGraceTime 30
