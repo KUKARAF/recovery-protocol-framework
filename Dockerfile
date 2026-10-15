@@ -12,8 +12,8 @@ RUN apt-get update && apt-get install -y \
 RUN mkdir -p /run/sshd /home/recovery/.ssh && \
     chmod 700 /home/recovery/.ssh
 
-# Create recovery user
-RUN useradd -m -d /home/recovery -s /bin/bash recovery && \
+# Create recovery user with git-shell (restricted shell for git-only access)
+RUN useradd -m -d /home/recovery -s /usr/bin/git-shell recovery && \
     echo "recovery:recovery" | chpasswd
 
 # Set up git repository directories
