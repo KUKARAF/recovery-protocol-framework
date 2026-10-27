@@ -163,6 +163,22 @@ def _report_performance(reading: dict, root: Path) -> None:
     typer.echo(f"\nSPEED: {reading['time_ms_best']:.2f}ms best / {reading['time_ms_median']:.2f}ms median")
     typer.echo(f"SIZE:  {reading['size_lines']} lines")
 
+    comp = reading.get("complexity") or {}
+    if comp.get("available"):
+        typer.echo(
+            f"TIME COMPLEXITY (estimated):  {comp['time_class']} "
+            f"(fitted exponent {comp['time_exponent']})"
+        )
+        typer.echo(
+            f"SPACE COMPLEXITY (estimated): {comp['space_class']} "
+            f"(fitted exponent {comp['space_exponent']})"
+        )
+    else:
+        typer.echo("(no complexity estimate - this task has no size-scaling benchmark)")
+
+    if reading.get("no_imports_bonus"):
+        typer.echo("\n⭐ BONUS: solved with no imports - builtins only.")
+
     base = _server_base_url(root)
     if base and _submit_performance(base, reading):
         typer.echo(f"\nRecorded. View it at {base}/stats")
@@ -218,12 +234,16 @@ def _server_base_url(root: Path) -> Optional[str]:
 
 
 def _submit_performance(base: str, reading: dict) -> bool:
+    comp = reading.get("complexity") or {}
     payload = json.dumps({
         "module": reading["module_name"],
         "task": reading["task_id"],
         "time_ms_best": reading["time_ms_best"],
         "time_ms_median": reading["time_ms_median"],
         "size_lines": reading["size_lines"],
+        "time_class": comp.get("time_class"),
+        "space_class": comp.get("space_class"),
+        "no_imports_bonus": reading.get("no_imports_bonus", False),
     }).encode()
     req = urllib.request.Request(
         f"{base}/performance", data=payload,

@@ -169,7 +169,8 @@ def recover():
 
 @app.route("/performance", methods=["POST"])
 def submit_performance():
-    """Record one SPEED/SIZE benchmark reading from `recovery performance`."""
+    """Record one SPEED/SIZE (+ optional complexity class) benchmark
+    reading from `recovery performance`."""
     data = request.get_json(silent=True) or {}
     required = ("module", "task", "time_ms_best", "time_ms_median", "size_lines")
     if not all(k in data for k in required):
@@ -182,6 +183,11 @@ def submit_performance():
         "time_ms_best": data["time_ms_best"],
         "time_ms_median": data["time_ms_median"],
         "size_lines": data["size_lines"],
+        # Empirical estimates, not every task has one (no size to scale) -
+        # None/absent means "not available", not "zero".
+        "time_class": data.get("time_class"),
+        "space_class": data.get("space_class"),
+        "no_imports_bonus": bool(data.get("no_imports_bonus", False)),
         "recorded": datetime.now().isoformat(),
     })
     save_performance(log)
