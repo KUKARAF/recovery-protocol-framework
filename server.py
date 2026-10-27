@@ -87,11 +87,18 @@ def recover():
 
     wheel = cli_wheel_name()
     host = request.host.split(":")[0]
+    install = f"pip install http://{request.host}/dist/{wheel}" if wheel else None
+    clone = f"git clone ssh://recovery@{host}:{GIT_HOST_PORT}/srv/git/modules.git"
+    # One line covering the whole setup: install the CLI, clone the
+    # challenge repo, cd into it, and run the CLI once - it finds where
+    # you are on its own, so there's nothing else to type.
+    command = f"{install} && {clone} && cd modules && recovery" if install else None
     return jsonify({
         "status": "success",
         "message": "Recovery SSH key registered.",
-        "clone": f"git clone ssh://recovery@{host}:{GIT_HOST_PORT}/srv/git/modules.git",
-        "install": f"pip install http://{request.host}/dist/{wheel}" if wheel else None,
+        "clone": clone,
+        "install": install,
+        "command": command,
     }), 200
 
 

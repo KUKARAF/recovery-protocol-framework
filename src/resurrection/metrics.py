@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 from dataclasses import dataclass, asdict
 
+from resurrection.paths import find_game_root
+
 
 @dataclass
 class SolutionMetrics:
@@ -24,8 +26,12 @@ class SolutionMetrics:
 class MetricsTracker:
     """Track and compare metrics across solutions."""
 
-    def __init__(self):
-        self.best_file = Path.cwd() / ".recovery-best.json"
+    def __init__(self, root: Optional[Path] = None):
+        # Same game-folder resolution as Validator, so best times are
+        # recorded consistently regardless of which subdirectory you're
+        # running `recovery` from.
+        game_root = Path(root) if root else find_game_root()
+        self.best_file = game_root / ".recovery-best.json"
         self.best_solutions = self._load_best()
 
     def _load_best(self) -> Dict[str, Any]:

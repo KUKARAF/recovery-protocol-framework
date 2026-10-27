@@ -244,6 +244,49 @@
             opacity: 0.7;
         }
 
+        .copy-command {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            background-color: var(--void-lift);
+            border: 1px solid var(--purple);
+            padding: 0.75rem;
+            margin: 0.8rem 0;
+            overflow-x: auto;
+        }
+
+        .copy-command code {
+            flex: 1;
+            color: var(--silver);
+            font-family: var(--font-mono);
+            font-size: 12px;
+            letter-spacing: 0.05em;
+            white-space: pre;
+        }
+
+        .copy-command .copy-btn {
+            background-color: transparent;
+            border: 1px solid var(--purple);
+            color: var(--purple);
+            font-family: var(--font-mono);
+            font-size: 11px;
+            padding: 0.45rem 0.9rem;
+            cursor: pointer;
+            flex-shrink: 0;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            transition: all 0.2s ease;
+        }
+
+        .copy-command .copy-btn:hover {
+            color: var(--silver);
+            border-color: var(--silver);
+        }
+
+        .copy-command .copy-btn:active {
+            opacity: 0.7;
+        }
+
         .distortion {
             opacity: 0.5;
             position: relative;
@@ -490,23 +533,45 @@
                 return;
             }
 
-            const host = window.location.hostname;
             const steps = [
                 ['BREAK GLASS PROTOCOL ACTIVATED', 'log-line accent'],
                 ['Recovery SSH key registered.', 'log-line success'],
                 ['Initiating recovery server... running.', 'log-line accent'],
                 ['', 'log-line'],
-                ['1. Install the recovery CLI (once):', 'log-line accent'],
-                ['   ' + (result.install || 'pip install <cli wheel unavailable>'), 'log-line success'],
-                ['', 'log-line'],
-                ['2. Run git clone to get started:', 'log-line accent'],
-                ['   git clone ssh://recovery@' + host + ':2222/srv/git/modules.git', 'log-line success'],
-                ['', 'log-line'],
-                ['3. cd modules and solve the challenges. Then run:', 'log-line accent'],
-                ['   recovery validate --module back_to_basics --task sort_signals', 'log-line success'],
+                ['Paste this into your terminal to begin recovery:', 'log-line accent'],
             ];
             await printSequence(steps);
+
+            const command = result.command || 'pip install <cli wheel unavailable>';
+            printCopyCommand(command);
         });
+
+        // Render one copy-to-clipboard command box
+        function printCopyCommand(command) {
+            const box = document.createElement('div');
+            box.className = 'copy-command';
+
+            const code = document.createElement('code');
+            code.textContent = command;
+
+            const copyBtn = document.createElement('button');
+            copyBtn.type = 'button';
+            copyBtn.className = 'copy-btn';
+            copyBtn.textContent = 'copy';
+            copyBtn.addEventListener('click', async function() {
+                try {
+                    await navigator.clipboard.writeText(command);
+                    copyBtn.textContent = 'copied';
+                } catch (err) {
+                    copyBtn.textContent = 'copy failed';
+                }
+                setTimeout(function() { copyBtn.textContent = 'copy'; }, 1500);
+            });
+
+            box.appendChild(code);
+            box.appendChild(copyBtn);
+            recoverySection.appendChild(box);
+        }
 
         // System theme listener
         window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
