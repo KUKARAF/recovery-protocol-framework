@@ -1,176 +1,110 @@
-# Resurrection Protocol
+# Recovery Protocol
 
-A Zachatronics-inspired programming challenge game set in the Illuminae Files universe.
+A git-based, Illuminae-flavoured Python learning game. An AI system recovering
+from catastrophic failure rebuilds its capabilities one task at a time — you
+write the code that restores it.
 
-## Setup
+## Quick Start (podman)
+
+This is the default way to run it: a container serves an intro page, lets you
+register an SSH key, and hands you a CLI + the challenge repo over git.
 
 ```bash
-# Install dependencies with uv
+# From this folder (recovery-protocol-framework/)
+podman rm -f recovery-protocol 2>/dev/null
+podman build -t recovery-protocol-server .
+podman run -d --name recovery-protocol -p 2222:2222 -p 8080:8080 recovery-protocol-server
+./seed.sh   # pushes ../recovery-protocol-modules into the container's modules.git
+```
+
+`seed.sh` expects `recovery-protocol-modules` cloned as a sibling directory:
+
+```bash
+git clone https://github.com/KUKARAF/recovery-protocol-modules.git ../recovery-protocol-modules
+```
+
+Keys and repos live inside the container. A rebuild wipes registered keys —
+re-register through the intro page and run `./seed.sh` again after each
+`podman run`.
+
+### Play
+
+1. Open `http://localhost:8080`, type to wake the system, paste your SSH
+   public key, submit.
+2. `pip install http://localhost:8080/dist/resurrection_protocol-0.1.0-py3-none-any.whl`
+3. `git clone ssh://recovery@localhost:2222/srv/git/modules.git && cd modules`
+4. Edit a task, e.g. `modules/back_to_basics_module/tasks/sort_signals.py`
+5. `recovery validate --module back_to_basics --task sort_signals`
+6. On a new best time: `git push origin HEAD:best/time`
+
+### Endpoints
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/` | intro page |
+| POST | `/recover` | body `{"sshKey": "<public key>"}`; validates and registers |
+| GET | `/dist/<wheel>` | CLI wheel built into the image |
+| GET | `/status` | keys registered, CLI wheel name |
+| GET | `/health` | liveness |
+
+### Notes
+
+- Podman rootless cannot bind 22, which is why git runs on 2222.
+- `localhost` may resolve to `::1`. The web app listens dual-stack so both work.
+
+## Local Dev (no container)
+
+For working on the game itself, or if you'd rather run everything locally
+without the SSH/web layer:
+
+```bash
 uv sync
-
-# Activate virtual environment
 source .venv/bin/activate
+
+# Clone the modules repo as your game folder's `modules/` directory
+git clone https://github.com/KUKARAF/recovery-protocol-modules.git recovery-game
+cd recovery-game   # this folder already contains modules/back_to_basics_module
+
+recovery info                                    # list modules found in ./modules
+recovery validate                                 # run all tests for the (only) module
+recovery validate --module back_to_basics --task sort_signals   # one task
 ```
 
-## How to Play
+`recovery validate` resolves module/task names loosely (`back_to_basics` or
+`back_to_basics_module` both work) and reports a timing comparison against
+your best recorded run when a single task passes.
 
-### 1. Read the Story
-- `backstory.md` - The world you're saving
-- `character.md` - Who you are
+## Modules
 
-### 2. Start Chapter 1
+Challenge content lives in the separate
+[recovery-protocol-modules](https://github.com/KUKARAF/recovery-protocol-modules)
+repo, not in this one. **back_to_basics_module** currently covers data
+manipulation fundamentals:
 
-```bash
-resurrection
-```
+- sort_signals
+- extract_callsign
+- decode_status
+- filter_logs
+- merge_signals
 
-This launches the game and guides you through Chapter 1: Signal Recovery.
-
-### 3. Solve Each Challenge
-
-For each challenge:
-1. Read the mission brief in the terminal
-2. Open the challenge file in your editor (vim/nano/code/etc.)
-3. Implement the function according to the instructions
-4. Save your solution
-5. Return to the game and press Enter
-
-For example, to solve the first challenge:
-```bash
-vim chapters/chapter_1/challenges/sort_signals.py
-```
-
-### 4. Test Your Solution
-
-The game will automatically run tests when you're ready. Or manually:
-
-```bash
-# Test a specific challenge
-python -m pytest chapters/chapter_1/tests/test_sort_signals.py -v
-
-# Test all of Chapter 1
-python -m pytest chapters/chapter_1/tests/ -v
-
-# Test with verbose failure info
-python -m pytest chapters/chapter_1/tests/test_sort_signals.py -vv
-```
-
-## Chapter 1: Signal Recovery
-
-Five challenges focused on **fundamental data manipulation**:
-
-1. **Sort Signals** - Sort a list of packet IDs
-2. **Extract Callsigns** - Find valid operator identifiers in corrupted data
-3. **Decode Status** - Count satellite status codes
-4. **Filter Logs** - Extract error messages from mixed logs
-5. **Merge Signals** - Combine two data streams by alternating elements
-
-## Core Skills Progression
-
-The game is designed to build real engineering skills:
-
-**Chapter 1** - Data Manipulation Fundamentals
-- List operations and sorting
-- String parsing and validation
-- Dictionary aggregation
-- Filtering and list comprehensions
-- List merging and iteration
-
-**Future Chapters** (Coming)
-- **Chapter 2** - File I/O and Regex
-- **Chapter 3** - Data Structures and Algorithms
-- **Chapter 4** - Functions, Recursion, and Design
-- **Chapter 5** - Threading and Parallelization
+Future modules planned: file_io, data_structures, algorithms, concurrency.
 
 ## Project Structure
 
 ```
-python_game/
-├── src/resurrection/           # Main package (installable)
-│   ├── cli.py                 # CLI entry point
-│   ├── game.py                # Game orchestration
-│   ├── evaluator.py           # Challenge testing
-│   ├── progress.py            # Progress tracking
-│   └── tui/                   # Terminal UI
-├── chapters/                  # Challenge content
-│   └── chapter_1/
-│       ├── challenges/        # Challenge files (edit these!)
-│       ├── tests/            # Pytest test files
-│       └── metadata.json     # Chapter definition
-├── CLAUDE.md                  # Project documentation
-├── backstory.md              # Game narrative
-├── character.md              # Player character
-└── pyproject.toml            # uv project config
+recovery-protocol-framework/
+├── src/resurrection/        # Installable CLI package
+│   ├── cli.py              # `recovery` entry point (validate, info)
+│   ├── validator.py        # Discovers modules/, runs pytest
+│   ├── metrics.py          # Best-time tracking
+│   └── tui/                # Terminal output (Rich)
+├── server.py                # Flask app: intro page, key registration, wheel download
+├── Dockerfile / entrypoint.sh  # Container: sshd (git) + web app
+├── seed.sh                  # Dev tool: push modules repo into the container
+├── backstory.md / character.md  # Narrative
+└── pyproject.toml           # uv project config
 ```
-
-## Commands
-
-```bash
-# Launch the game
-resurrection
-
-# Test a challenge manually
-resurrection test --chapter 1 --challenge sort_signals
-
-# Check your progress
-resurrection status
-```
-
-## Design Philosophy
-
-This game teaches **real engineering skills** through:
-
-1. **Problem Decomposition** - Breaking big problems into small solvable pieces
-2. **Data Transformation** - Understanding how data flows through systems
-3. **Pattern Recognition** - Finding signal in noise
-4. **Testing & Verification** - Validating solutions rigorously
-5. **Performance Thinking** - Understanding algorithm complexity
-
-Each challenge has:
-- **Clear Narrative Context** - Why you're solving this in-universe
-- **Specific Learning Goals** - What engineering skill you're building
-- **Comprehensive Tests** - Multiple test cases covering edge cases
-- **Scalable Difficulty** - Start simple, add complexity
-- **Performance Expectations** - Time and space complexity
-
-## Notes for Developers
-
-- Challenges are **editable in any text editor** - full path shown when playing
-- Tests use **pytest** - comprehensive edge case coverage
-- Game framework is **installable as a Python package** via uv
-- TUI display uses **Rich** library for beautiful terminal output
-- Future: Textual framework for interactive UI with animations
-
-## Troubleshooting
-
-If you get import errors:
-```bash
-# Reinstall the package
-uv pip install -e .
-
-# Or resync everything
-uv sync --force
-```
-
-If tests won't run:
-```bash
-# Make sure virtual environment is activated
-source .venv/bin/activate
-
-# Reinstall pytest
-uv pip install pytest --force-reinstall
-```
-
-## Next Steps
-
-1. Solve all Chapter 1 challenges
-2. Check your progress: `resurrection status`
-3. Wait for Chapter 2: Channel Reopening (coming soon!)
 
 ---
 
-**Remember**: You're not just solving puzzles. You're rebuilding Earth's defenses.
-
-Every line of code matters.
-
-**Welcome to the Resurrection Protocol.**
+**Welcome to the Recovery Protocol.** Every passing test is a capability restored.
