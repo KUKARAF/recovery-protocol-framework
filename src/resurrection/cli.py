@@ -1,14 +1,20 @@
 """Command-line interface for Recovery Protocol."""
 
+import json
 import os
+import re
 import shlex
 import subprocess
+import urllib.error
+import urllib.request
+from pathlib import Path
 from typing import Optional
 
 import typer
 
 from resurrection.metrics import MetricsTracker
 from resurrection.paths import find_game_root
+from resurrection.performance import DEFAULT_RUNS, measure
 from resurrection.state import ModuleState
 from resurrection.validator import ValidationError, Validator
 
@@ -44,12 +50,17 @@ def validate(
     """
     root = find_game_root()
     validator = Validator(root=root)
+    tracker = MetricsTracker(root=root)
+
+    def already_solved(task_id: str) -> bool:
+        return tracker.get_best(task_id)["best_time"] is not None
+
     try:
         module_name = validator.resolve_module(module)
         if task:
             result = validator.run_task(module_name, task)
         else:
-            result = ModuleState(validator).current(module_name)
+            result = ModuleState(validator).current(module_name, already_solved)
             if result is None:
                 typer.echo(f"[!] No tasks found in module '{module_name}'.", err=True)
                 raise typer.Exit(code=2)
@@ -69,8 +80,9 @@ def validate(
     typer.echo("\n✓ All validations passed")
 
     task_id = result["task_id"]
+    module_name = result["module_name"]
     elapsed_ms = result["time_elapsed"] * 1000
-    tracker = MetricsTracker(root=root)
+    first_solve = not already_solved(task_id)
     comparison = tracker.compare(task_id, elapsed_ms)
 
     typer.echo("\n" + "=" * 60)
@@ -78,11 +90,84 @@ def validate(
     typer.echo("=" * 60)
 
     if comparison["is_best_time"]:
-        typer.echo("\n⚡ NEW BEST TIME. Push it to the server with:")
-        typer.echo(f"   {tracker.get_push_command(task_id, 'time')}")
+        if _git_push(root, "best/time"):
+            typer.echo("\n⚡ NEW BEST TIME. Pushed to best/time.")
+        else:
+            typer.echo("\n⚡ NEW BEST TIME. Could not push automatically - push it yourself with:")
+            typer.echo(f"   {tracker.get_push_command(task_id, 'time')}")
 
     tracker.record_solution(task_id, elapsed_ms)
+
+    if first_solve:
+        typer.echo(f"\n🎉 First clear! Benchmarking performance ({DEFAULT_RUNS} runs)...")
+        reading = measure(validator, module_name, task_id)
+        _report_performance(reading, root)
+
     raise typer.Exit(code=0)
+
+
+@app.command()
+def performance(
+    target: Optional[str] = typer.Argument(
+        None, help="module/task, e.g. core/sort_signals. Omit to use your current task."
+    ),
+):
+    """
+    Benchmark a solved task: SPEED (execution time) and SIZE (solution
+    length) - the same two independent axes a Zachtronics game scores a
+    solution on, not one blended number. Recorded to the stats page on the
+    recovery server's web UI.
+
+    Examples:
+        recovery performance
+        recovery performance core/sort_signals
+    """
+    root = find_game_root()
+    validator = Validator(root=root)
+    tracker = MetricsTracker(root=root)
+
+    def already_solved(tid: str) -> bool:
+        return tracker.get_best(tid)["best_time"] is not None
+
+    try:
+        if target:
+            if "/" not in target:
+                typer.echo("[!] Pass module/task, e.g. core/sort_signals.", err=True)
+                raise typer.Exit(code=2)
+            module_arg, task_id = target.split("/", 1)
+            module_name = validator.resolve_module(module_arg)
+        else:
+            module_name = validator.resolve_module(None)
+            current = ModuleState(validator).current(module_name, already_solved)
+            if current is None:
+                typer.echo(f"[!] No tasks found in module '{module_name}'.", err=True)
+                raise typer.Exit(code=2)
+            task_id = current["task_id"]
+    except ValidationError as e:
+        typer.echo(f"[!] {e}", err=True)
+        raise typer.Exit(code=2)
+
+    typer.echo(f"Benchmarking {task_id} ({DEFAULT_RUNS} runs)...")
+    reading = measure(validator, module_name, task_id)
+    _report_performance(reading, root)
+
+
+def _report_performance(reading: dict, root: Path) -> None:
+    """Print a performance reading and submit it to the server, if reachable."""
+    if not reading["passed"]:
+        typer.echo(f"\nunrecoverable error in {reading['task_file'].name}")
+        if reading.get("error"):
+            typer.echo(reading["error"])
+        raise typer.Exit(code=1)
+
+    typer.echo(f"\nSPEED: {reading['time_ms_best']:.2f}ms best / {reading['time_ms_median']:.2f}ms median")
+    typer.echo(f"SIZE:  {reading['size_lines']} lines")
+
+    base = _server_base_url(root)
+    if base and _submit_performance(base, reading):
+        typer.echo(f"\nRecorded. View it at {base}/")
+    else:
+        typer.echo("\n(Could not reach the recovery server to record this - is it running?)")
 
 
 def _offer_manual_recovery(result: dict) -> None:
@@ -96,6 +181,59 @@ def _offer_manual_recovery(result: dict) -> None:
 
     editor = shlex.split(os.environ.get("EDITOR", "vim"))
     subprocess.call([*editor, str(result["task_file"])])
+
+
+def _git_push(root: Path, refspec: str) -> bool:
+    """Push HEAD to a branch on origin, e.g. `best/time`. True on success."""
+    try:
+        result = subprocess.run(
+            ["git", "push", "origin", f"HEAD:{refspec}"],
+            cwd=root, capture_output=True, text=True, timeout=15,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return result.returncode == 0
+
+
+def _server_base_url(root: Path) -> Optional[str]:
+    """Derive the recovery server's web URL from the game folder's git remote.
+
+    The modules repo is cloned from the same host that serves the web UI
+    (ssh://recovery@<host>:2222/... clone, <host>:8080 web), so the remote
+    already tells us where to report performance to - no separate config.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(root), "remote", "get-url", "origin"],
+            capture_output=True, text=True, timeout=5,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0:
+        return None
+    match = re.search(r"@([^:/]+)(?::\d+)?[:/]", result.stdout.strip())
+    if not match:
+        return None
+    return f"http://{match.group(1)}:8080"
+
+
+def _submit_performance(base: str, reading: dict) -> bool:
+    payload = json.dumps({
+        "module": reading["module_name"],
+        "task": reading["task_id"],
+        "time_ms_best": reading["time_ms_best"],
+        "time_ms_median": reading["time_ms_median"],
+        "size_lines": reading["size_lines"],
+    }).encode()
+    req = urllib.request.Request(
+        f"{base}/performance", data=payload,
+        headers={"Content-Type": "application/json"}, method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            return resp.status == 200
+    except (urllib.error.URLError, OSError):
+        return False
 
 
 @app.command()

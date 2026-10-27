@@ -12,6 +12,7 @@ RECOVERY_HOME = Path("/home/recovery")
 SSH_DIR = RECOVERY_HOME / ".ssh"
 AUTHORIZED_KEYS = SSH_DIR / "authorized_keys"
 REGISTRY = RECOVERY_HOME / ".recovery-db.json"
+PERFORMANCE_LOG = RECOVERY_HOME / ".recovery-performance.json"
 DIST_DIR = APP_DIR / "dist"
 GIT_HOST_PORT = 2222
 
@@ -44,6 +45,16 @@ def key_is_valid(public_key):
 def cli_wheel_name():
     wheels = sorted(DIST_DIR.glob("*.whl"))
     return wheels[-1].name if wheels else None
+
+
+def load_performance():
+    if PERFORMANCE_LOG.exists():
+        return json.loads(PERFORMANCE_LOG.read_text())
+    return {"runs": []}
+
+
+def save_performance(data):
+    PERFORMANCE_LOG.write_text(json.dumps(data, indent=2))
 
 
 @app.route("/", methods=["GET"])
@@ -100,6 +111,33 @@ def recover():
         "install": install,
         "command": command,
     }), 200
+
+
+@app.route("/performance", methods=["POST"])
+def submit_performance():
+    """Record one SPEED/SIZE benchmark reading from `recovery performance`."""
+    data = request.get_json(silent=True) or {}
+    required = ("module", "task", "time_ms_best", "time_ms_median", "size_lines")
+    if not all(k in data for k in required):
+        return jsonify({"status": "error", "error": "missing fields"}), 400
+
+    log = load_performance()
+    log["runs"].append({
+        "module": data["module"],
+        "task": data["task"],
+        "time_ms_best": data["time_ms_best"],
+        "time_ms_median": data["time_ms_median"],
+        "size_lines": data["size_lines"],
+        "recorded": datetime.now().isoformat(),
+    })
+    save_performance(log)
+    return jsonify({"status": "success"}), 200
+
+
+@app.route("/performance", methods=["GET"])
+def get_performance():
+    """All recorded benchmark readings, for the stats view on `/`."""
+    return jsonify(load_performance())
 
 
 @app.route("/status", methods=["GET"])
