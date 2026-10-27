@@ -1,6 +1,7 @@
 """Recovery Protocol server: intro page, CLI download, and SSH key registration."""
 
 import json
+import re
 import subprocess
 from datetime import datetime
 from pathlib import Path
@@ -15,6 +16,7 @@ REGISTRY = RECOVERY_HOME / ".recovery-db.json"
 PERFORMANCE_LOG = RECOVERY_HOME / ".recovery-performance.json"
 DIST_DIR = APP_DIR / "dist"
 GIT_HOST_PORT = 2222
+MODULES_BARE_REPO = Path("/srv/git/modules.git")
 
 app = Flask(__name__)
 
@@ -55,6 +57,58 @@ def load_performance():
 
 def save_performance(data):
     PERFORMANCE_LOG.write_text(json.dumps(data, indent=2))
+
+
+def _git_show(path_in_repo):
+    """One file's content at HEAD of the modules bare repo, or None."""
+    result = subprocess.run(
+        ["git", "--git-dir", str(MODULES_BARE_REPO), "show", f"HEAD:{path_in_repo}"],
+        capture_output=True, text=True,
+    )
+    return result.stdout if result.returncode == 0 else None
+
+
+def _task_order(module_name, task_ids):
+    """Prefer metadata.json's authored order - same convention the CLI's
+    Validator.list_tasks uses - falling back to sorted names."""
+    metadata_raw = _git_show(f"modules/{module_name}/metadata.json")
+    if metadata_raw:
+        try:
+            data = json.loads(metadata_raw)
+            ordered = [m["id"] for m in data.get("missions", []) if m.get("id") in task_ids]
+            if ordered:
+                return ordered
+        except json.JSONDecodeError:
+            pass
+    return sorted(task_ids)
+
+
+def list_module_roster():
+    """Modules and their tasks, in authored order, read straight from the
+    bare modules repo at HEAD.
+
+    This is the same roster `recovery info`/`recovery validate` discover
+    client-side from a checked-out clone, read here server-side instead so
+    the stats page can show unsolved tasks too, not just ones that already
+    have a recorded benchmark.
+    """
+    result = subprocess.run(
+        ["git", "--git-dir", str(MODULES_BARE_REPO), "ls-tree", "-r", "--name-only", "HEAD"],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        return []
+
+    modules = {}
+    for path in result.stdout.splitlines():
+        m = re.match(r"^modules/([^/]+)/tests/test_(.+)\.py$", path)
+        if m:
+            modules.setdefault(m.group(1), set()).add(m.group(2))
+
+    return [
+        {"id": module_name, "tasks": _task_order(module_name, task_ids)}
+        for module_name, task_ids in sorted(modules.items())
+    ]
 
 
 @app.route("/", methods=["GET"])
@@ -136,8 +190,24 @@ def submit_performance():
 
 @app.route("/performance", methods=["GET"])
 def get_performance():
-    """All recorded benchmark readings, for the stats view on `/`."""
+    """All recorded benchmark readings, for the stats page."""
     return jsonify(load_performance())
+
+
+@app.route("/roster", methods=["GET"])
+def roster():
+    """Which modules and tasks actually exist, read from the modules repo
+    itself - so the stats page can show unsolved tasks, not just solved
+    ones that happen to have a recorded benchmark."""
+    return jsonify({"modules": list_module_roster()})
+
+
+@app.route("/stats", methods=["GET"])
+def stats_page():
+    """Standalone recovery-statistics view: no boot sequence, no wake-up
+    theater. For a player who's already recovering and just wants to check
+    progress, not go through registration again."""
+    return send_from_directory(APP_DIR, "stats.html")
 
 
 @app.route("/status", methods=["GET"])

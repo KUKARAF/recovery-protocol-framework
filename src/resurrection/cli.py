@@ -165,7 +165,7 @@ def _report_performance(reading: dict, root: Path) -> None:
 
     base = _server_base_url(root)
     if base and _submit_performance(base, reading):
-        typer.echo(f"\nRecorded. View it at {base}/")
+        typer.echo(f"\nRecorded. View it at {base}/stats")
     else:
         typer.echo("\n(Could not reach the recovery server to record this - is it running?)")
 

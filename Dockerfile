@@ -38,7 +38,7 @@ RUN pip install --no-cache-dir build && \
     rm -rf /build
 
 WORKDIR /app
-COPY server.py intro.html /app/
+COPY server.py intro.html stats.html /app/
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
